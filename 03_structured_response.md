@@ -2,7 +2,7 @@
 
 ## Introduction
 
-In this part, you'll explore how to use 0-shot, 1-shot, and few-shot learning techniques with Large Language Models (LLMs) to generate structured responses for healthcare applications. You'll implement different prompting strategies, compare their performance, and analyze how prompt design affects response quality and structure.
+In this part, you'll explore how to use 0-shot, 1-shot, and few-shot learning techniques with Large Language Models (LLMs) to generate structured responses for healthcare applications. You'll implement different prompting strategies using the Gout Emergency Department Chief Complaint Corpora, compare their performance, and analyze how prompt design affects response quality and structure.
 
 ## Learning Objectives
 
@@ -48,7 +48,55 @@ os.makedirs('utils', exist_ok=True)
 os.makedirs('results/part_3', exist_ok=True)
 ```
 
-## 1. Understanding Few-shot Learning
+## 1. Loading the Gout Emergency Dataset
+
+```python
+# First, let's set up the Gout Emergency Department dataset
+import os
+import pandas as pd
+import json
+
+# Create data directory if it doesn't exist
+os.makedirs('data/gout_emergency', exist_ok=True)
+
+# Function to download the dataset
+def download_gout_dataset():
+    """
+    Download the Gout Emergency Department Chief Complaint Corpora
+    
+    Note: You need to manually download this dataset from PhysioNet:
+    https://physionet.org/content/emer-complaint-gout/
+    
+    After downloading, place the files in the data/gout_emergency directory
+    """
+    gout_data_path = 'data/gout_emergency/chief_complaints.csv'
+    
+    if os.path.exists(gout_data_path):
+        print(f"Loading Gout Emergency dataset from {gout_data_path}")
+        return pd.read_csv(gout_data_path)
+    else:
+        print(f"Gout Emergency dataset not found at {gout_data_path}")
+        print("Please download the dataset from PhysioNet:")
+        print("https://physionet.org/content/emer-complaint-gout/")
+        print("After downloading, place the files in the data/gout_emergency directory")
+        return None
+
+# Try to load the dataset
+gout_df = download_gout_dataset()
+
+# If the dataset is loaded successfully, display some information
+if gout_df is not None:
+    print(f"Dataset shape: {gout_df.shape}")
+    print("\nSample complaints:")
+    for i, complaint in enumerate(gout_df['chief_complaint'].head(5)):
+        print(f"{i+1}. {complaint}")
+    
+    # Check if the dataset has the expected columns
+    print("\nDataset columns:")
+    print(gout_df.columns.tolist())
+```
+
+## 2. Understanding Few-shot Learning
 
 ```python
 # Let's explore the concepts of 0-shot, 1-shot, and few-shot learning
@@ -81,7 +129,7 @@ Output format:
 
 print("Task Description:")
 print(task_description)
-## 2. Implementing the Structured Response Utility
+## 3. Implementing the Structured Response Utility
 
 ```python
 # Let's implement a utility for generating structured responses using different prompting strategies
@@ -251,7 +299,7 @@ class StructuredResponseGenerator:
 # Create an instance of the structured response generator
 generator = StructuredResponseGenerator(model_name="google/flan-t5-base")
 ```
-## 3. Defining Examples for Few-shot Learning
+## 4. Defining Examples for Few-shot Learning
 
 ```python
 # Let's define some examples for our medical symptom classification task
@@ -339,7 +387,7 @@ print("Example 1:")
 print(f"Input: {symptom_examples[0][0]}")
 print(f"Output: {symptom_examples[0][1]}")
 ```
-## 4. Comparing Prompting Strategies
+## 5. Comparing Prompting Strategies
 
 ```python
 # Let's compare different prompting strategies on a set of test symptoms
@@ -464,7 +512,7 @@ def plot_comparison(results):
                 "Value": results[strategy][metric]
             })
     
-## 5. Creating a Reusable Utility
+## 6. Creating a Reusable Utility
 
 ```python
 # Let's create a reusable utility for structured responses
@@ -853,9 +901,10 @@ create_usage_examples()
 
 ## Progress Checkpoints
 
-1. **Few-shot Learning Concepts**:
+1. **Dataset and Few-shot Learning Concepts**:
+   - [ ] Load and explore the Gout Emergency dataset
    - [ ] Understand 0-shot, 1-shot, and few-shot learning
-   - [ ] Define a healthcare-related task
+   - [ ] Define a gout-related classification task
    - [ ] Create a structured output format
 
 2. **Utility Implementation**:
@@ -895,8 +944,8 @@ create_usage_examples()
 3. **Prompting Issues**:
    - Problem: Poor performance with zero-shot
    - Solution: Use few-shot with diverse examples
-   - Problem: Examples not representative
-   - Solution: Ensure examples cover all categories
+   - Problem: Examples not representative of gout complaints
+   - Solution: Ensure examples cover different types of gout presentations
 
 4. **Evaluation Issues**:
    - Problem: Metrics not capturing quality

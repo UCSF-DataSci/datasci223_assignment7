@@ -2,7 +2,7 @@
 
 ## Introduction
 
-In this part, you'll create a command line tool that interacts with a Large Language Model (LLM) API. This tool will allow users to have conversations with an LLM, focusing on healthcare-related queries. You'll learn how to connect to LLM APIs, handle responses, and create a user-friendly interface.
+In this part, you'll create a command line tool that interacts with a Large Language Model (LLM) API. This tool will allow users to have conversations with an LLM, focusing on healthcare-related queries about gout. You'll learn how to connect to LLM APIs, handle responses, and create a user-friendly interface using the Gout Emergency Department Chief Complaint Corpora.
 
 ## Learning Objectives
 
@@ -43,10 +43,50 @@ os.makedirs('utils', exist_ok=True)
 os.makedirs('results/part_2', exist_ok=True)
 ```
 
-## 1. Exploring LLM API Options
+## 1. Dataset and LLM API Options
 
 ```python
-# Let's explore different LLM API options that are free or low-cost
+# First, let's set up the Gout Emergency Department dataset
+import os
+import pandas as pd
+import json
+
+# Create data directory if it doesn't exist
+os.makedirs('data/gout_emergency', exist_ok=True)
+
+# Function to download the dataset
+def download_gout_dataset():
+    """
+    Download the Gout Emergency Department Chief Complaint Corpora
+    
+    Note: You need to manually download this dataset from PhysioNet:
+    https://physionet.org/content/emer-complaint-gout/
+    
+    After downloading, place the files in the data/gout_emergency directory
+    """
+    gout_data_path = 'data/gout_emergency/chief_complaints.csv'
+    
+    if os.path.exists(gout_data_path):
+        print(f"Loading Gout Emergency dataset from {gout_data_path}")
+        return pd.read_csv(gout_data_path)
+    else:
+        print(f"Gout Emergency dataset not found at {gout_data_path}")
+        print("Please download the dataset from PhysioNet:")
+        print("https://physionet.org/content/emer-complaint-gout/")
+        print("After downloading, place the files in the data/gout_emergency directory")
+        return None
+
+# Try to load the dataset
+gout_df = download_gout_dataset()
+
+# If the dataset is loaded successfully, display some information
+if gout_df is not None:
+    print(f"Dataset shape: {gout_df.shape}")
+    print("\nSample complaints:")
+    for i, complaint in enumerate(gout_df['chief_complaint'].head(5)):
+        print(f"{i+1}. {complaint}")
+
+# Now let's explore different LLM API options that are free or low-cost
 
 # Option 1: Hugging Face Inference API
 # Pros: Free tier available, many models to choose from
@@ -74,7 +114,7 @@ huggingface_models = [
     "bigscience/bloom-560m",      # 560M parameters, multilingual
 ]
 
-print("Available models for free use with Hugging Face:")
+print("\nAvailable models for free use with Hugging Face:")
 for i, model in enumerate(huggingface_models):
     print(f"{i+1}. {model}")
 ```
