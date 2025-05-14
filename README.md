@@ -59,33 +59,29 @@ Goals:
 - Analyze performance trade-offs (accuracy vs. complexity)
 - Justify final model selection
 
-## Part 2: LLM API Usage (Command Line Chat Tool)
+## Part 2: Basic LLM Chat Tool
 
-- Create a command line tool to interact with an LLM API
-- Implement a chat interface for healthcare-related queries using the Gout Emergency Department dataset
-- Save the tool as `utils/llm_chat.py`
-- Document usage in `results/part_2/usage_examples.txt`
-
-Goals:
-- Successfully connect to an LLM API (e.g., Hugging Face)
-- Implement a user-friendly command line interface
-- Handle API errors gracefully
-- Optimize for low-latency responses
-- Process and respond to gout-related medical queries
-
-## Part 3: Structured Response (Few-shot Learning)
-
-- Implement 0/1/few-shot learning with an LLM
-- Compare performance across different prompting strategies
-- Use the Gout Emergency Department dataset for structured responses
-- Save implementation as `utils/structured_response.py`
-- Save metrics in `results/part_3/prompt_comparison.txt`
+- Create a simple command-line chat tool using the Hugging Face API
+- Use the tool to ask healthcare-related questions
+- Save the implementation as `utils/chat.py`
+- Include a brief usage example in `results/part_2/example.txt`
 
 Goals:
-- Implement at least 3 different prompting strategies
-- Evaluate performance on gout-related classification tasks
-- Analyze the impact of prompt design on response quality
-- Optimize for both accuracy and response structure
+- Connect to a free Hugging Face model (e.g., FLAN-T5)
+- Create a basic interactive chat loop
+- Handle simple error cases
+- Test with a few healthcare questions
+
+## Part 3: Prompt Engineering Basics
+
+- Experiment with different prompting techniques
+- Compare zero-shot, one-shot, and few-shot prompting
+- Document your findings in `results/part_3/prompting_results.txt`
+
+Goals:
+- Try at least 2 different prompting approaches
+- Compare the quality of responses
+- Document what works best for different types of questions
 
 ## Part 4: Optional - nanoGPT Training
 

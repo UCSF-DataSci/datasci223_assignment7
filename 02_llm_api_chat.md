@@ -1,16 +1,15 @@
-# Part 2: LLM API Usage (Command Line Chat Tool)
+# Part 2: Basic LLM Chat Tool
 
 ## Introduction
 
-In this part, you'll create a command line tool that interacts with a Large Language Model (LLM) API. This tool will allow users to have conversations with an LLM, focusing on healthcare-related queries about gout. You'll learn how to connect to LLM APIs, handle responses, and create a user-friendly interface using the Gout Emergency Department Chief Complaint Corpora.
+In this part, you'll create a simple command-line chat tool that interacts with a Large Language Model (LLM) through the Hugging Face API. This tool will allow you to have conversations with an LLM about healthcare topics.
 
 ## Learning Objectives
 
-- Connect to an LLM API (e.g., Hugging Face)
-- Implement a command line interface for chat interactions
-- Handle API errors and rate limits gracefully
-- Process and format LLM responses
-- Create a reusable utility for LLM interactions
+- Connect to the Hugging Face API
+- Create a basic interactive chat loop
+- Handle simple error cases
+- Test with healthcare questions
 
 ## Setup and Installation
 
@@ -19,17 +18,16 @@ In this part, you'll create a command line tool that interacts with a Large Lang
 %pip install -r requirements.txt
 
 # Additional packages for LLM API interaction
-%pip install requests transformers huggingface_hub
+%pip install requests
 
 # Import necessary libraries
 import os
 import sys
-import json
 import requests
-import argparse
-from typing import List, Dict, Any, Optional
 import time
 import logging
+import argparse
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(
@@ -43,749 +41,272 @@ os.makedirs('utils', exist_ok=True)
 os.makedirs('results/part_2', exist_ok=True)
 ```
 
-## 1. Dataset and LLM API Options
+## 1. Connecting to the Hugging Face API
+
+The Hugging Face Inference API provides access to many language models. We'll use models that are available on the free tier.
 
 ```python
-# First, let's set up the Gout Emergency Department dataset
-import os
-import pandas as pd
-import json
+# Example of a simple API request to Hugging Face
+API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+headers = {"Authorization": f"Bearer YOUR_API_KEY"}  # Optional for some models
 
-# Create data directory if it doesn't exist
-os.makedirs('data/gout_emergency', exist_ok=True)
-
-# Function to download the dataset
-def download_gout_dataset():
+def query(payload):
     """
-    Download the Gout Emergency Department Chief Complaint Corpora
+    Send a query to the Hugging Face API
     
-    Note: You need to manually download this dataset from PhysioNet:
-    https://physionet.org/content/emer-complaint-gout/
-    
-    After downloading, place the files in the data/gout_emergency directory
+    Args:
+        payload: Dictionary containing the query parameters
+        
+    Returns:
+        The API response
     """
-    gout_data_path = 'data/gout_emergency/chief_complaints.csv'
+    # TODO: Implement the API request
+    # Use requests.post to send the query to the API_URL
+    # Return the response
+    pass
     
-    if os.path.exists(gout_data_path):
-        print(f"Loading Gout Emergency dataset from {gout_data_path}")
-        return pd.read_csv(gout_data_path)
-    else:
-        print(f"Gout Emergency dataset not found at {gout_data_path}")
-        print("Please download the dataset from PhysioNet:")
-        print("https://physionet.org/content/emer-complaint-gout/")
-        print("After downloading, place the files in the data/gout_emergency directory")
-        return None
-
-# Try to load the dataset
-gout_df = download_gout_dataset()
-
-# If the dataset is loaded successfully, display some information
-if gout_df is not None:
-    print(f"Dataset shape: {gout_df.shape}")
-    print("\nSample complaints:")
-    for i, complaint in enumerate(gout_df['chief_complaint'].head(5)):
-        print(f"{i+1}. {complaint}")
-
-# Now let's explore different LLM API options that are free or low-cost
-
-# Option 1: Hugging Face Inference API
-# Pros: Free tier available, many models to choose from
-# Cons: Limited rate, smaller models than commercial options
-
-# Option 2: Local models with Hugging Face Transformers
-# Pros: No API costs, full control
-# Cons: Requires more computational resources, limited to smaller models
-
-# Option 3: OpenAI API (not free, but included for comparison)
-# Pros: State-of-the-art models
-# Cons: Requires payment
-
-# For this assignment, we'll focus on the Hugging Face Inference API
-# as it provides a good balance of accessibility and capability
-
-# Let's explore some suitable models on Hugging Face
-huggingface_models = [
-    "google/flan-t5-small",       # 80M parameters, good for simple Q&A
-    "google/flan-t5-base",        # 250M parameters, better quality
-    "google/flan-t5-large",       # 780M parameters, good quality but slower
-    "facebook/opt-350m",          # 350M parameters, general purpose
-    "facebook/opt-1.3b",          # 1.3B parameters, better quality
-    "EleutherAI/gpt-neo-125m",    # 125M parameters, GPT-style model
-    "bigscience/bloom-560m",      # 560M parameters, multilingual
-]
-
-print("\nAvailable models for free use with Hugging Face:")
-for i, model in enumerate(huggingface_models):
-    print(f"{i+1}. {model}")
+# Test the query function
+test_payload = {"inputs": "What are the symptoms of diabetes?"}
+response = query(test_payload)
+print(response)
 ```
 
-## 2. Implementing the LLM API Client
+## 2. Creating Simple Chat Scripts
+
+Your task is to create two simple scripts that interact with the Hugging Face API:
+
+1. A basic one-off chat script (`utils/one_off_chat.py`)
+2. A contextual conversation script (`utils/conversation.py`)
+
+### One-Off Chat Script
+
+Create a script that handles independent interactions (each prompt/response is separate):
 
 ```python
-# Let's implement a client for the Hugging Face Inference API
+# utils/one_off_chat.py
 
-class LLMClient:
-    """Client for interacting with LLM APIs"""
-    
-    def __init__(
-        self, 
-        model_name: str = "google/flan-t5-base",
-        api_key: Optional[str] = None,
-        max_retries: int = 3,
-        timeout: int = 30
-    ):
-        """
-        Initialize the LLM client
-        
-        Args:
-            model_name: Name of the model to use
-            api_key: API key for authentication (optional for some models)
-            max_retries: Maximum number of retries on failure
-            timeout: Timeout for API requests in seconds
-        """
-        self.model_name = model_name
-        self.api_key = api_key or os.environ.get("HUGGINGFACE_API_KEY")
-        self.max_retries = max_retries
-        self.timeout = timeout
-        self.api_url = f"https://api-inference.huggingface.co/models/{model_name}"
-        self.headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-        
-        logger.info(f"Initialized LLM client with model: {model_name}")
-    
-    def generate_text(self, prompt: str) -> str:
-        """
-        Generate text from the LLM based on the prompt
-        
-        Args:
-            prompt: The input prompt for the LLM
-            
-        Returns:
-            The generated text response
-        """
-        payload = {"inputs": prompt}
-        
-        for attempt in range(self.max_retries):
-            try:
-                response = requests.post(
-                    self.api_url,
-                    headers=self.headers,
-                    json=payload,
-                    timeout=self.timeout
-                )
-                
-                if response.status_code == 200:
-                    return response.json()[0]["generated_text"]
-                elif response.status_code == 429:
-                    # Rate limit exceeded
-                    wait_time = int(response.headers.get("Retry-After", 30))
-                    logger.warning(f"Rate limit exceeded. Waiting {wait_time} seconds.")
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"API request failed with status code {response.status_code}: {response.text}")
-                    time.sleep(2 ** attempt)  # Exponential backoff
-            except Exception as e:
-                logger.error(f"Error during API request: {str(e)}")
-                time.sleep(2 ** attempt)  # Exponential backoff
-        
-        return "I'm sorry, I couldn't generate a response due to technical difficulties."
-    
-    def chat(self, messages: List[Dict[str, str]]) -> str:
-        """
-        Generate a response based on a conversation history
-        
-        Args:
-            messages: List of message dictionaries with 'role' and 'content'
-            
-        Returns:
-            The generated response
-        """
-        # Format the conversation history into a prompt
-        prompt = ""
-        for message in messages:
-            role = message["role"]
-            content = message["content"]
-            
-            if role == "system":
-                prompt += f"System: {content}\n\n"
-            elif role == "user":
-                prompt += f"User: {content}\n\n"
-            elif role == "assistant":
-                prompt += f"Assistant: {content}\n\n"
-        
-        prompt += "Assistant: "
-        
-        # Generate response
-        response = self.generate_text(prompt)
-        
-        return response
-
-# Test the LLM client with a simple prompt
-def test_llm_client():
-    # Create client (no API key needed for testing)
-    client = LLMClient(model_name="google/flan-t5-small")
-    
-    # Test with a simple healthcare question
-    messages = [
-        {"role": "system", "content": "You are a helpful healthcare assistant."},
-        {"role": "user", "content": "What are the symptoms of diabetes?"}
-    ]
-    
-    print("Testing LLM client with a healthcare question...")
-    response = client.chat(messages)
-    print(f"Response: {response}")
-    
-    return client
-
-# Uncomment to test
-# test_client = test_llm_client()
-```
-
-## 3. Building the Command Line Interface
-
-```python
-# Now let's build a command line interface for our LLM chat tool
-
-class LLMChatTool:
-    """Command line tool for chatting with an LLM"""
-    
-    def __init__(
-        self,
-        model_name: str = "google/flan-t5-base",
-        api_key: Optional[str] = None,
-        system_prompt: str = "You are a helpful healthcare assistant that provides accurate, evidence-based information."
-    ):
-        """
-        Initialize the chat tool
-        
-        Args:
-            model_name: Name of the model to use
-            api_key: API key for authentication
-            system_prompt: System prompt to guide the LLM's behavior
-        """
-        self.client = LLMClient(model_name=model_name, api_key=api_key)
-        self.conversation = [{"role": "system", "content": system_prompt}]
-        self.system_prompt = system_prompt
-        
-    def reset_conversation(self):
-        """Reset the conversation history"""
-        self.conversation = [{"role": "system", "content": self.system_prompt}]
-        print("Conversation has been reset.")
-    
-    def add_message(self, content: str, role: str = "user"):
-        """Add a message to the conversation history"""
-        self.conversation.append({"role": role, "content": content})
-    
-    def get_response(self) -> str:
-        """Get a response from the LLM based on the conversation history"""
-        response = self.client.chat(self.conversation)
-        self.add_message(response, role="assistant")
-        return response
-    
-    def run_interactive(self):
-        """Run the chat tool in interactive mode"""
-        print(f"LLM Chat Tool - Model: {self.client.model_name}")
-        print("Type 'exit' to quit or 'reset' to start a new conversation.")
-        print("=" * 50)
-        
-        while True:
-            user_input = input("\nYou: ")
-            
-            if user_input.lower() in ["exit", "quit"]:
-                print("Goodbye!")
-                break
-            
-            if user_input.lower() == "reset":
-                self.reset_conversation()
-                continue
-            
-            self.add_message(user_input)
-            
-            print("\nAssistant: ", end="")
-            sys.stdout.flush()  # Ensure the prompt is displayed immediately
-            
-            response = self.get_response()
-            print(response)
-
-# Create a function to save the tool as a Python script
-def save_chat_tool():
-    """Save the LLM chat tool as a Python script"""
-    script_content = '''#!/usr/bin/env python3
-# llm_chat.py - A command line tool for chatting with an LLM
-
-import os
-import sys
-import json
 import requests
 import argparse
-from typing import List, Dict, Any, Optional
-import time
-import logging
+import os
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+def get_response(prompt, model_name="google/flan-t5-base", api_key=None):
+    """
+    Get a response from the model
+    
+    Args:
+        prompt: The prompt to send to the model
+        model_name: Name of the model to use
+        api_key: API key for authentication (optional for some models)
+        
+    Returns:
+        The model's response
+    """
+    # TODO: Implement the get_response function
+    # Set up the API URL and headers
+    # Create a payload with the prompt
+    # Send the payload to the API
+    # Extract and return the generated text from the response
+    # Handle any errors that might occur
+    pass
 
-class LLMClient:
-    """Client for interacting with LLM APIs"""
+def run_chat():
+    """Run an interactive chat session"""
+    print("Welcome to the Simple LLM Chat! Type 'exit' to quit.")
     
-    def __init__(
-        self, 
-        model_name: str = "google/flan-t5-base",
-        api_key: Optional[str] = None,
-        max_retries: int = 3,
-        timeout: int = 30
-    ):
-        """
-        Initialize the LLM client
-        
-        Args:
-            model_name: Name of the model to use
-            api_key: API key for authentication (optional for some models)
-            max_retries: Maximum number of retries on failure
-            timeout: Timeout for API requests in seconds
-        """
-        self.model_name = model_name
-        self.api_key = api_key or os.environ.get("HUGGINGFACE_API_KEY")
-        self.max_retries = max_retries
-        self.timeout = timeout
-        self.api_url = f"https://api-inference.huggingface.co/models/{model_name}"
-        self.headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-        
-        logger.info(f"Initialized LLM client with model: {model_name}")
-    
-    def generate_text(self, prompt: str) -> str:
-        """
-        Generate text from the LLM based on the prompt
-        
-        Args:
-            prompt: The input prompt for the LLM
+    while True:
+        user_input = input("\nYou: ")
+        if user_input.lower() == 'exit':
+            print("Goodbye!")
+            break
             
-        Returns:
-            The generated text response
-        """
-        payload = {"inputs": prompt}
+        # TODO: Get response from the model
+        # Print the response
         
-        for attempt in range(self.max_retries):
-            try:
-                response = requests.post(
-                    self.api_url,
-                    headers=self.headers,
-                    json=payload,
-                    timeout=self.timeout
-                )
-                
-                if response.status_code == 200:
-                    return response.json()[0]["generated_text"]
-                elif response.status_code == 429:
-                    # Rate limit exceeded
-                    wait_time = int(response.headers.get("Retry-After", 30))
-                    logger.warning(f"Rate limit exceeded. Waiting {wait_time} seconds.")
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"API request failed with status code {response.status_code}: {response.text}")
-                    time.sleep(2 ** attempt)  # Exponential backoff
-            except Exception as e:
-                logger.error(f"Error during API request: {str(e)}")
-                time.sleep(2 ** attempt)  # Exponential backoff
-        
-        return "I'm sorry, I couldn't generate a response due to technical difficulties."
-    
-    def chat(self, messages: List[Dict[str, str]]) -> str:
-        """
-        Generate a response based on a conversation history
-        
-        Args:
-            messages: List of message dictionaries with 'role' and 'content'
-            
-        Returns:
-            The generated response
-        """
-        # Format the conversation history into a prompt
-        prompt = ""
-        for message in messages:
-            role = message["role"]
-            content = message["content"]
-            
-            if role == "system":
-                prompt += f"System: {content}\\n\\n"
-            elif role == "user":
-                prompt += f"User: {content}\\n\\n"
-            elif role == "assistant":
-                prompt += f"Assistant: {content}\\n\\n"
-        
-        prompt += "Assistant: "
-        
-        # Generate response
-        response = self.generate_text(prompt)
-        
-        return response
-
-class LLMChatTool:
-    """Command line tool for chatting with an LLM"""
-    
-    def __init__(
-        self,
-        model_name: str = "google/flan-t5-base",
-        api_key: Optional[str] = None,
-        system_prompt: str = "You are a helpful healthcare assistant that provides accurate, evidence-based information."
-    ):
-        """
-        Initialize the chat tool
-        
-        Args:
-            model_name: Name of the model to use
-            api_key: API key for authentication
-            system_prompt: System prompt to guide the LLM's behavior
-        """
-        self.client = LLMClient(model_name=model_name, api_key=api_key)
-        self.conversation = [{"role": "system", "content": system_prompt}]
-        self.system_prompt = system_prompt
-        
-    def reset_conversation(self):
-        """Reset the conversation history"""
-        self.conversation = [{"role": "system", "content": self.system_prompt}]
-        print("Conversation has been reset.")
-    
-    def add_message(self, content: str, role: str = "user"):
-        """Add a message to the conversation history"""
-        self.conversation.append({"role": role, "content": content})
-    
-    def get_response(self) -> str:
-        """Get a response from the LLM based on the conversation history"""
-        response = self.client.chat(self.conversation)
-        self.add_message(response, role="assistant")
-        return response
-    
-    def run_interactive(self):
-        """Run the chat tool in interactive mode"""
-        print(f"LLM Chat Tool - Model: {self.client.model_name}")
-        print("Type 'exit' to quit or 'reset' to start a new conversation.")
-        print("=" * 50)
-        
-        while True:
-            user_input = input("\\nYou: ")
-            
-            if user_input.lower() in ["exit", "quit"]:
-                print("Goodbye!")
-                break
-            
-            if user_input.lower() == "reset":
-                self.reset_conversation()
-                continue
-            
-            self.add_message(user_input)
-            
-            print("\\nAssistant: ", end="")
-            sys.stdout.flush()  # Ensure the prompt is displayed immediately
-            
-            response = self.get_response()
-            print(response)
-
 def main():
-    """Main function to run the chat tool"""
-    parser = argparse.ArgumentParser(description="LLM Chat Tool - A command line interface for chatting with an LLM")
-    
-    parser.add_argument(
-        "--model", 
-        type=str, 
-        default="google/flan-t5-base",
-        help="Name of the Hugging Face model to use"
-    )
-    
-    parser.add_argument(
-        "--api-key", 
-        type=str, 
-        default=None,
-        help="API key for Hugging Face (optional, can also use HUGGINGFACE_API_KEY env var)"
-    )
-    
-    parser.add_argument(
-        "--system-prompt", 
-        type=str, 
-        default="You are a helpful healthcare assistant that provides accurate, evidence-based information.",
-        help="System prompt to guide the LLM's behavior"
-    )
+    parser = argparse.ArgumentParser(description="Chat with an LLM")
+    # TODO: Add arguments to the parser
     
     args = parser.parse_args()
     
-    chat_tool = LLMChatTool(
-        model_name=args.model,
-        api_key=args.api_key,
-        system_prompt=args.system_prompt
-    )
+    # TODO: Run the chat function with parsed arguments
     
-    try:
-        chat_tool.run_interactive()
-    except KeyboardInterrupt:
-        print("\\nGoodbye!")
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        sys.exit(1)
-
 if __name__ == "__main__":
     main()
-'''
-    
-    # Save the script
-    with open('utils/llm_chat.py', 'w') as f:
-        f.write(script_content)
-    
-    # Make the script executable
-    os.chmod('utils/llm_chat.py', 0o755)
-    
-    print("Chat tool saved to utils/llm_chat.py")
-
-# Save the chat tool
-save_chat_tool()
 ```
 
-## 4. Testing and Usage Examples
+### Contextual Conversation Script
+
+Create a script that maintains conversation history:
 
 ```python
-# Let's create some usage examples for our chat tool
+# utils/conversation.py
 
-def create_usage_examples():
-    """Create usage examples for the LLM chat tool"""
+import requests
+import argparse
+import os
+
+def get_response(prompt, history=None, model_name="google/flan-t5-base", api_key=None, history_length=3):
+    """
+    Get a response from the model using conversation history
     
-    examples = '''# LLM Chat Tool Usage Examples
+    Args:
+        prompt: The current user prompt
+        history: List of previous (prompt, response) tuples
+        model_name: Name of the model to use
+        api_key: API key for authentication
+        history_length: Number of previous exchanges to include in context
+        
+    Returns:
+        The model's response
+    """
+    # TODO: Implement the contextual response function
+    # Initialize history if None
+    if history is None:
+        history = []
+        
+    # TODO: Format a prompt that includes previous exchanges
+    # Get a response from the API
+    # Return the response
+    pass
 
-## Basic Usage
-
-Run the chat tool with default settings:
-
-```bash
-python utils/llm_chat.py
-```
-
-## Specifying a Different Model
-
-Use a smaller model for faster responses:
-
-```bash
-python utils/llm_chat.py --model google/flan-t5-small
-```
-
-Use a larger model for better quality:
-
-```bash
-python utils/llm_chat.py --model google/flan-t5-large
-```
-
-## Custom System Prompt
-
-Specify a custom system prompt to guide the LLM's behavior:
-
-```bash
-python utils/llm_chat.py --system-prompt "You are a medical expert specializing in cardiology. Provide detailed, technical answers to questions about heart health."
-```
-
-## Using an API Key
-
-If you have a Hugging Face API key, you can provide it:
-
-```bash
-python utils/llm_chat.py --api-key YOUR_API_KEY
-```
-
-Or set it as an environment variable:
-
-```bash
-export HUGGINGFACE_API_KEY=YOUR_API_KEY
-python utils/llm_chat.py
-```
-
-## Example Conversations
-
-Here are some example conversations you can have with the tool:
-
-### General Health Questions
-
-```
-You: What are the symptoms of type 2 diabetes?
-Assistant: Common symptoms of type 2 diabetes include increased thirst, frequent urination, hunger, fatigue, blurred vision, slow-healing sores, and frequent infections. Many people with type 2 diabetes may not experience symptoms initially.
-
-You: How is it diagnosed?
-Assistant: Type 2 diabetes is diagnosed through blood tests that measure blood glucose levels. The main tests include fasting blood glucose test, A1C test (which shows average blood sugar over 2-3 months), and oral glucose tolerance test. A diagnosis is typically confirmed when fasting blood glucose is ≥126 mg/dL, A1C is ≥6.5%, or glucose tolerance test shows blood glucose ≥200 mg/dL after 2 hours.
-```
-
-### Medication Information
-
-```
-You: What are the side effects of metformin?
-Assistant: Common side effects of metformin include gastrointestinal issues like nausea, vomiting, diarrhea, stomach pain, and loss of appetite. These often improve over time. Less common side effects include metallic taste, vitamin B12 deficiency, and lactic acidosis (rare but serious). Taking metformin with meals can help reduce gastrointestinal side effects.
-
-You: Can it interact with other medications?
-Assistant: Yes, metformin can interact with several medications. Notable interactions include with contrast dyes used in some imaging procedures, which may increase risk of kidney problems. It can also interact with certain diabetes medications, potentially causing low blood sugar. Some heart medications, diuretics, corticosteroids, and certain antibiotics may also interact with metformin. Always inform your healthcare provider about all medications you're taking.
-```
-
-### Preventive Health
-
-```
-You: What are the recommended cancer screenings for someone in their 50s?
-Assistant: For people in their 50s, recommended cancer screenings typically include:
-
-1. Colorectal cancer: Regular screening starting at age 45-50 with colonoscopy every 10 years or alternatives like stool-based tests annually
-2. Breast cancer (women): Mammogram every 1-2 years
-3. Cervical cancer (women): Pap test every 3 years or HPV test every 5 years
-4. Prostate cancer (men): Discuss PSA testing with your doctor
-5. Lung cancer: Annual low-dose CT scan if you have a significant smoking history
-6. Skin cancer: Regular skin examinations
-
-These recommendations may vary based on personal and family medical history. Consult with your healthcare provider for personalized screening recommendations.
-```
-
-## Interactive Mode
-
-In interactive mode, you can have a continuous conversation with the LLM. Type 'reset' to start a new conversation or 'exit' to quit.
-
-```
-You: I've been experiencing headaches and fatigue lately. What could be causing this?
-Assistant: Headaches and fatigue can have many causes. Common ones include stress, dehydration, lack of sleep, poor posture, eye strain, anemia, or caffeine withdrawal. More serious causes might include infections, medication side effects, or chronic conditions like fibromyalgia. If symptoms persist or are severe, please consult a healthcare provider for proper evaluation.
-
-You: reset
-Conversation has been reset.
-
-You: What's the recommended daily water intake?
-Assistant: The recommended daily water intake is generally about 8 cups (64 ounces) of water per day, but this can vary based on factors like your size, activity level, climate, and overall health. The Institute of Medicine suggests about 3.7 liters (125 ounces) daily for men and 2.7 liters (91 ounces) for women, including water from all beverages and foods.
-```
-'''
+def run_chat():
+    """Run an interactive chat session with context"""
+    print("Welcome to the Contextual LLM Chat! Type 'exit' to quit.")
     
-    # Save the examples
-    with open('results/part_2/usage_examples.txt', 'w') as f:
-        f.write(examples)
+    # Initialize conversation history
+    history = []
     
-    print("Usage examples saved to results/part_2/usage_examples.txt")
-
-# Create usage examples
-create_usage_examples()
+    while True:
+        user_input = input("\nYou: ")
+        if user_input.lower() == 'exit':
+            print("Goodbye!")
+            break
+            
+        # TODO: Get response using conversation history
+        # Update history
+        # Print the response
+        
+def main():
+    parser = argparse.ArgumentParser(description="Chat with an LLM using conversation history")
+    # TODO: Add arguments to the parser
+    
+    args = parser.parse_args()
+    
+    # TODO: Run the chat function with parsed arguments
+    
+if __name__ == "__main__":
+    main()
 ```
 
-## 5. Optimizing for Healthcare Queries
+## 3. Testing and Evaluation
+
+Create a script to test your chat implementations with specific healthcare questions.
 
 ```python
-# Let's create a specialized version of our chat tool for healthcare queries
-
-def create_healthcare_specialized_tool():
-    """Create a specialized version of the chat tool for healthcare queries"""
-    
-    healthcare_prompt = '''You are a helpful healthcare assistant that provides accurate, evidence-based information. Follow these guidelines:
-
-1. Provide factual, scientifically accurate information based on current medical knowledge
-2. Clearly indicate when information is general advice versus medical guidance
-3. Remind users to consult healthcare professionals for personal medical advice
-4. Avoid making definitive diagnoses or treatment recommendations
-5. Use plain language and explain medical terminology
-6. Cite sources or mention the general consensus when appropriate
-7. Be honest about limitations of knowledge
-8. Focus on providing educational information about health conditions, treatments, and preventive care
-
-Remember that your purpose is to inform and educate, not to replace professional medical care.'''
-    
-    script_content = '''#!/usr/bin/env python3
-# healthcare_chat.py - A specialized chat tool for healthcare queries
+# utils/test_chat.py
 
 import os
-import sys
-from llm_chat import LLMClient, LLMChatTool
-import argparse
+import csv
+from pathlib import Path
 
-HEALTHCARE_PROMPT = """You are a helpful healthcare assistant that provides accurate, evidence-based information. Follow these guidelines:
+# Import our chat modules - since we're in the same directory
+from one_off_chat import get_response as get_one_off_response
+# Optionally import the conversation module if testing that too
+# from conversation import get_response as get_contextual_response
 
-1. Provide factual, scientifically accurate information based on current medical knowledge
-2. Clearly indicate when information is general advice versus medical guidance
-3. Remind users to consult healthcare professionals for personal medical advice
-4. Avoid making definitive diagnoses or treatment recommendations
-5. Use plain language and explain medical terminology
-6. Cite sources or mention the general consensus when appropriate
-7. Be honest about limitations of knowledge
-8. Focus on providing educational information about health conditions, treatments, and preventive care
+def test_chat(questions, model_name="google/flan-t5-base", api_key=None):
+    """
+    Test the chat function with a list of questions
+    
+    Args:
+        questions: A list of questions to test
+        model_name: Name of the model to use
+        api_key: API key for authentication
+        
+    Returns:
+        A dictionary mapping questions to responses
+    """
+    results = {}
+    
+    for question in questions:
+        print(f"Testing question: {question}")
+        # Get response using the one-off chat function
+        response = get_one_off_response(question, model_name, api_key)
+        results[question] = response
+        
+    return results
 
-Remember that your purpose is to inform and educate, not to replace professional medical care."""
+# List of healthcare questions to test
+test_questions = [
+    "What are the symptoms of gout?",
+    "How is gout diagnosed?",
+    "What treatments are available for gout?",
+    "What lifestyle changes can help manage gout?",
+    "What foods should be avoided with gout?"
+]
 
-def main():
-    """Main function to run the healthcare chat tool"""
-    parser = argparse.ArgumentParser(description="Healthcare Chat Tool - A specialized chat interface for healthcare queries")
+def save_results(results, output_file="results/part_2/example.txt"):
+    """
+    Save the test results to a file
     
-    parser.add_argument(
-        "--model", 
-        type=str, 
-        default="google/flan-t5-large",  # Using a larger model for better healthcare knowledge
-        help="Name of the Hugging Face model to use"
-    )
-    
-    parser.add_argument(
-        "--api-key", 
-        type=str, 
-        default=None,
-        help="API key for Hugging Face (optional, can also use HUGGINGFACE_API_KEY env var)"
-    )
-    
-    args = parser.parse_args()
-    
-    print("Healthcare Chat Tool - Specialized for medical and health information")
-    print("NOTE: This tool provides general information only and is not a substitute for professional medical advice.")
-    print("=" * 80)
-    
-    chat_tool = LLMChatTool(
-        model_name=args.model,
-        api_key=args.api_key,
-        system_prompt=HEALTHCARE_PROMPT
-    )
-    
-    try:
-        chat_tool.run_interactive()
-    except KeyboardInterrupt:
-        print("\\nGoodbye!")
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        sys.exit(1)
+    Args:
+        results: Dictionary mapping questions to responses
+        output_file: Path to the output file
+    """
+    with open(output_file, 'w') as f:
+        # Write header
+        f.write("# LLM Chat Tool Test Results\n\n")
+        
+        # Write usage examples
+        f.write("## Usage Examples\n\n")
+        f.write("```bash\n")
+        f.write("# Run the one-off chat\n")
+        f.write("python utils/one_off_chat.py\n\n")
+        f.write("# Run the contextual chat\n")
+        f.write("python utils/conversation.py\n")
+        f.write("```\n\n")
+        
+        # Write test results
+        f.write("## Test Results\n\n")
+        f.write("```csv\n")
+        f.write("question,response\n")
+        
+        for question, response in results.items():
+            # Format the question and response for CSV
+            q = question.replace(',', '').replace('\n', ' ')
+            r = response.replace(',', '').replace('\n', ' ')
+            f.write(f"{q},{r}\n")
+            
+        f.write("```\n")
 
+# Run the test and save results
 if __name__ == "__main__":
-    main()
-'''
-    
-    # Save the script
-    with open('utils/healthcare_chat.py', 'w') as f:
-        f.write(script_content)
-    
-    # Make the script executable
-    os.chmod('utils/healthcare_chat.py', 0o755)
-    
-    print("Healthcare specialized chat tool saved to utils/healthcare_chat.py")
-
-# Create the healthcare specialized tool
-create_healthcare_specialized_tool()
+    results = test_chat(test_questions)
+    save_results(results)
+    print("Test results saved to results/part_2/example.txt")
 ```
 
 ## Progress Checkpoints
 
-1. **API Exploration**:
-   - [ ] Research available LLM API options
-   - [ ] Identify free or low-cost options
-   - [ ] Select appropriate model for healthcare queries
+1. **API Connection**:
+   - [ ] Successfully connect to the Hugging Face API
+   - [ ] Send a query and receive a response
+   - [ ] Handle API errors gracefully
 
-2. **Client Implementation**:
-   - [ ] Implement API client with error handling
-   - [ ] Test basic text generation
-   - [ ] Implement conversation formatting
+2. **Chat Function Implementation**:
+   - [ ] Implement the get_response function
+   - [ ] Create the run_chat function for interactive sessions
+   - [ ] Handle errors and edge cases
 
 3. **Command Line Interface**:
-   - [ ] Create interactive chat interface
-   - [ ] Implement conversation management
-   - [ ] Add command line arguments
+   - [ ] Create a parser with appropriate arguments
+   - [ ] Implement the main function
+   - [ ] Test the CLI functionality
 
-4. **Tool Creation**:
-   - [ ] Save implementation as executable script
-   - [ ] Document usage examples
-   - [ ] Create healthcare-specialized version
-
-5. **Testing and Optimization**:
-   - [ ] Test with various healthcare queries
-   - [ ] Optimize response formatting
-   - [ ] Ensure error handling works properly
+4. **Testing and Evaluation**:
+   - [ ] Test the functions with healthcare questions
+   - [ ] Save the results in a structured format
+   - [ ] Analyze the quality of responses
 
 ## Common Issues and Solutions
 
@@ -795,20 +316,31 @@ create_healthcare_specialized_tool()
    - Problem: Authentication errors
    - Solution: Verify API key and environment variables
 
-2. **Response Quality Issues**:
-   - Problem: Irrelevant or generic responses
-   - Solution: Improve system prompt and use larger models
-   - Problem: Inconsistent formatting
-   - Solution: Post-process responses or use structured output prompts
+2. **Response Parsing Issues**:
+   - Problem: Unexpected response format
+   - Solution: Add error handling for different response structures
+   - Problem: Empty or error responses
+   - Solution: Provide meaningful fallback responses
 
-3. **Performance Issues**:
-   - Problem: Slow response times
-   - Solution: Use smaller models or implement caching
-   - Problem: High API costs
-   - Solution: Optimize prompt length and use free tier models
+3. **CLI Issues**:
+   - Problem: Arguments not parsed correctly
+   - Solution: Test with different argument combinations
+   - Problem: Script not executable
+   - Solution: Check file permissions
 
-4. **Ethical Considerations**:
-   - Problem: Medical advice liability
-   - Solution: Add clear disclaimers and focus on educational content
-   - Problem: Privacy concerns
-   - Solution: Don't store or log sensitive user queries
+## What to Submit
+
+1. Your implementation of the chat scripts:
+   - Basic requirement: `utils/one_off_chat.py` for single prompt/response chat
+   - Stretch goal (optional): `utils/conversation.py` for contextual chat
+   - Testing script: `utils/test_chat.py` to evaluate your implementation
+
+2. Test results in `results/part_2/example.txt` with the following format:
+   - Usage examples section showing how to run your scripts
+   - Test results section with CSV-formatted question/response pairs
+   - If you implemented the stretch goal, include examples of contextual exchanges
+
+The auto-grader should check:
+1. That your chat scripts can be executed
+2. That they correctly handle the test questions
+3. That your results file contains the required sections
